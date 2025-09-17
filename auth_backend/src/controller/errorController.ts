@@ -21,6 +21,12 @@ const handleValidationError = (err: any): AppError => {
   return new AppError(message, 400); // Sets 400 status for validation failures
 };
 
+// Handles Mongoose Server connection error to any servers in MongoDB Atlas cluster
+const handleMongooseServerSelectionError = (err: any): AppError => {
+  const errors = Object.values(err.errors).map((el: any) => el.message);
+  return new AppError('An error occurred. Please try again later.', 400); // Sets 400 status for validation failures
+};
+
 // Handles invalid JWT error
 const handleJWTError = (): AppError =>
   new AppError('Invalid token. Please log in again.', 401);
@@ -99,6 +105,10 @@ const globalErrorHandler = (
 
     case error.name === 'ValidationError':
       error = handleValidationError(error);
+      break;
+
+    case error.name === 'MongooseServerSelectionError':
+      error = handleMongooseServerSelectionError(error);
       break;
 
     case error.name === 'JsonWebTokenError':

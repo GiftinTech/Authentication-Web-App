@@ -1,7 +1,8 @@
 import mongoose, { Error } from 'mongoose';
 import dotenv from 'dotenv';
-import app from './app';
 dotenv.config();
+
+import app from './app';
 
 const db_uri = process.env.DATABASE;
 const port = process.env.PORT || 3000;

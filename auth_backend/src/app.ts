@@ -1,6 +1,10 @@
 import path from 'path';
 import express, { NextFunction, Request, Response } from 'express';
 
+import session from 'express-session';
+import passport from 'passport';
+import { Strategy as Auth0Strategy } from 'passport-auth0';
+
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -8,10 +12,12 @@ import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import mongoSanitize from 'express-mongo-sanitize';
 import compression from 'compression';
-import { xss } from 'express-xss-sanitizer';
 import hpp from 'hpp';
+
 import AppError from './utils/appError';
 import globalErrorHandler from './controller/errorController';
+import authRouter from './routes/authRoutes';
+import sanitizeRequest from './utils/sanitizeMiddleware';
 
 // start express app
 const app = express();
@@ -30,6 +36,7 @@ let corsOptions;
 process.env.NODE_ENV === 'development'
   ? (corsOptions = {
       origin: 'http://localhost:5173',
+      credentials: true,
     })
   : (corsOptions = {
       origin: [''],
@@ -60,6 +67,25 @@ app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' })); // parse form data
 app.use(cookieParser()); // parse cookies
 
+// --- Session and Passport Middleware ---
+const SESSION_SECRET = process.env.SESSION_SECRET as string;
+app.use(
+  session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      sameSite: 'none',
+    },
+  }),
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+// --- End of Session and Passport Middleware ---
+
 app.use((req: Request, res: Response, next: NextFunction) => {
   const originalQuery = req.query;
   Object.defineProperty(req, 'query', {
@@ -72,7 +98,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 }); // Make req.query writable BEFORE any MW that mutates it
 
 app.use(mongoSanitize()); // data sanitization against NoSQL query injection
-app.use(xss()); // Sanitize reqs againt xss;
+app.use(sanitizeRequest); // sanitize all incoming requests
 app.use(hpp()); // prevent param pollution
 app.use(compression()); // reduce size of res body to improve perf & load time
 app.disable('x-powered-by'); // hide express version info
@@ -99,6 +125,7 @@ app.get('/health', (_req, res) => {
 app.get('/', (req: Request, res: Response) => res.send('API Running 🏃‍♀️'));
 
 // TODO: mount all routers
+app.use('/api/v1/auth', authRouter);
 
 app.use(notFoundHandler); // use MW to handle 404 routes
 
